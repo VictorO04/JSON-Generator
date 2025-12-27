@@ -2,42 +2,97 @@ import google.generativeai as genai
 import yaml
 import time
 import json
+import sys
 
 try:
+
+    # load config
+
     with open('config.yaml', 'r') as f:
         config = yaml.safe_load(f)
+    
+    if not config:
+        raise ValueError("config.yaml is empty")
+
+    if 'GOOGLE_API_KEY' not in config:
+        raise KeyError("GOOGLE_API_KEY not found in config.yaml")
 
     GOOGLE_API_KEY = config['GOOGLE_API_KEY']
-
     genai.configure(api_key=GOOGLE_API_KEY)
 
-    print("Setup concluído! API Key carregada\n")
+    print("Setup completed! API key loaded.\n")
+
+    # initialize model
 
     start_time = time.time()
-    print("--- Iniciando modelo ---\n")
 
-    model_flash = genai.GenerativeModel('gemini-2.5-flash')
+    print("--- Initializing model ---\n")
 
-    quantidade = input("Digite a quantidade de dados que deseja criar: ")
-    campos = input("Por fim, digite os campos obrigatórios: ")
+    model = genai.GenerativeModel('gemini-2.5-flash')
 
-    prompt_json = f"Gere {quantidade} dados para teste de sistema. Campos obrigatórios {campos}. Saída: Apenas um JSON Array puro. Sem blocos de código markdown(```json). Sem textos introdutórios."
+    # user input
 
-    print("\nSolicitando dados JSON...\n")
-    response = model_flash.generate_content(prompt_json)
+    quantity = input("Enter how many records you want to generate: ")
+    fields = input("Enter required fields (e.g. name, age, email): ")
 
-    texto_limpo = response.text.replace("```json", "").replace("```", "").strip()
+    # validate quantity
 
+    try:
+        quantity = int(quantity)
+    except ValueError:
+        print("Error: quantity must be an integer")
+        sys.exit(1)
+
+    # strict prompt
+
+    prompt_json = f"""You are a test data generator.
+    Generate EXACTLY {quantity} JSON objects.
+    Use ONLY the following fields: {fields}.
+    Do not create extra fields.
+    Do not explain anything.
+    Do not use markdown.
+    The response MUST be a valid JSON array."""
+
+    print("\nRequesting JSON data...\n")
+    response = model.generate_content(prompt_json)
+
+    # Clean response
+
+    cleaned_text = (
+        response.text
+        .replace("```json", "")
+        .replace("```", "")
+        .strip()
+    )
+
+    # Validate JSON
+
+    try:
+        data = json.loads(cleaned_text)
+    except json.JSONDecodeError:
+        print("Error: the AI did not return valid JSON.\n")
+        print(cleaned_text)
+        sys.exit(1)
+
+    # validate structure
+
+    if not isinstance(data, list):
+        print("Error: the returned JSON is not an array.")
+        sys.exit(1)
+    
     end_time = time.time()
 
-    print(f"Tempo para gerar: {end_time - start_time:.2f} segundos\n")
-    print(texto_limpo)
+    # output
 
-    dados = json.loads(texto_limpo)
+    print(cleaned_text)
+    print(f"\nTotal records generated: {len(data)}.")
+    print(f"Generation time: {end_time - start_time:.2f} seconds.")
 
-    print(f"\nTotal de dados gerados: {len(dados)}")
+except FileNotFoundError as e:
+    print(f"File error: {e}")
 
-except FileNotFoundError:
-    print("Erro: Crie o arquivo config.yaml")
-except KeyError:
-    print("Erro: Verifique se a chave no yaml chama-se 'GOOGLE_API_KEY'")
+except (KeyError, ValueError) as e:
+    print(f"Config error: {e}")
+
+except Exception as e:
+    print(f"Unexpected error: {e}")
