@@ -81,6 +81,8 @@ def generate_json(model, prompt):
     return data, cleaned_text
 
 def main():
+    quantity, fields, output = parse_args()
+
     start_time = time.time()
 
     api_key = load_config()
@@ -88,8 +90,6 @@ def main():
 
     print("--- Initializing model ---\n")
     model = init_model(api_key)
-
-    quantity, fields, output = parse_args()
 
     prompt = build_prompt(quantity, fields)
 
