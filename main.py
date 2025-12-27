@@ -3,6 +3,7 @@ import yaml
 import time
 import json
 import sys
+import argparse
 
 def load_config():
     with open('config.yaml', 'r') as f:
@@ -20,18 +21,34 @@ def init_model(api_key):
     genai.configure(api_key=api_key)
     return genai.GenerativeModel('gemini-2.5-flash')
 
-def get_user_input():
-    quantity = input("Enter how many records you want to generate: ")
-    fields = input("Enter required fields (e.g. name, age, email): ")
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Generate test JSON data using Gemini API"
+    )
 
-    try:
-        quantity = int(quantity)
-    except ValueError:
-        raise ValueError("quantity must be an integer")
-    
-    fields = ", ".join(f.strip() for f in fields.split(","))
+    parser.add_argument(
+        "--quantity",
+        type=int,
+        required=True,
+        help="Number of records to generate"
+    )
 
-    return quantity, fields
+    parser.add_argument(
+        "--fields",
+        required=True,
+        help="Comma-separated list of fields (e.g. name,age,email)"
+    )
+
+    parser.add_argument(
+        "--output",
+        help="Optional output file (e.g. output.json)"
+    )
+
+    args = parser.parse_args()
+
+    fields = ", ".join(f.strip() for f in args.fields.split(","))
+
+    return args.quantity, fields, args.output
 
 def build_prompt(quantity, fields):
     return f"""You are a test data generator.
@@ -72,7 +89,7 @@ def main():
     print("--- Initializing model ---\n")
     model = init_model(api_key)
 
-    quantity, fields = get_user_input()
+    quantity, fields, output = parse_args()
 
     prompt = build_prompt(quantity, fields)
 
@@ -80,9 +97,15 @@ def main():
 
     data, raw_json = generate_json(model, prompt)
 
+    if output: 
+        with open(output, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        print(f"JSON saved to {output}")
+    else:
+        print(raw_json)
+
     end_time = time.time()
 
-    print(raw_json)
     print(f"\nTotal records generated: {len(data)}.")
     print(f"Generation time: {end_time - start_time:.2f} seconds.")
 
